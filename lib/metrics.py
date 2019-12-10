@@ -100,7 +100,11 @@ def evaluate(net, xq, xb, gt, quantizers, best_key, device=None,
     xbt = forward_pass(net, sanitize(xb), device=device)
     if trainset is not None:
         trainset = forward_pass(net, sanitize(trainset), device=device)
+        nt, dt = trainset.shape
+        print("trainset nt:{},d:{}".format(nt,dt))
     nq, d = xqt.shape
+    print("xqt nt:{},d:{}".format(nq,d))
+
     res = {}
     score = 0
     for quantizer in quantizers:

@@ -14,26 +14,34 @@ import torch
 import argparse
 import os
 import time
-from lib.metrics import evaluate
-from lib.net import Normalize
+from lib.metrics import evaluate,sanitize
+from lib.net import Normalize,forward_pass
 join = os.path.join
 import torch.nn as nn
 from lib.data import load_dataset
 
+def ivecs_write(fname, m):
+    n, d = m.shape
+    m1 = np.empty((n, d + 1), dtype='int32')
+    m1[:, 0] = d
+    m1[:, 1:] = m
+    m1.tofile(fname)
+
+
+def fvecs_write(fname, m):
+    m = m.astype('float32')
+    ivecs_write(fname, m.view('int32'))
 
 if __name__ == "__main__":
     global args
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--candidates", type=int, default=10)
     parser.add_argument("--ckpt-path", type=str, required=True)
     parser.add_argument("--database", choices=["bigann", "deep1b","mmu10m"])
     parser.add_argument("--device", choices=["cpu", "cuda", "auto"],
                         default="auto")
     parser.add_argument("--gpu", action='store_true', default=False)
-    parser.add_argument("--quantizer", required=True)
-    parser.add_argument("--size-base", type=int, default=int(1e6))
-    parser.add_argument("--val", action='store_false', dest='test')
+    parser.add_argument("--out_prefix", type=str, required=True)
     parser.set_defaults(gpu=False, test=True)
 
     args = parser.parse_args()
@@ -67,13 +75,13 @@ if __name__ == "__main__":
         net.load_state_dict(ckpt['state_dict'])
         net = net.to(args.device)
         net = net.eval()
-
-    elif args.ckpt_path.startswith("mmupca-"):
-        train_size=100000
-        assert args.database is not None
-        assert args.database.startswith("mmu")
-        (xt, xb, xq, gt) = load_dataset(args.database+"pca", args.device, size=args.size_base, test=args.test)
-        args.dim = int(args.ckpt_path[4:])
+        xq = forward_pass(net, sanitize(xq), device=args.device)
+        print("xq finish")
+        xb = forward_pass(net, sanitize(xb), device=args.device)
+        xt = forward_pass(net, sanitize(xt), device=args.device)
+        fvecs_write(args.out_prefix+".spreadvector.query.d"+str(xq.shape[1])+".n"+str(xq.shape[0])+".fvecs",xq)
+        fvecs_write(args.out_prefix+".spreadvector.base.d"+str(xb.shape[1])+".n"+str(xb.shape[0])+".fvecs",xb)
+        fvecs_write(args.out_prefix+".spreadvector.learn.d"+str(xt.shape[1])+".n"+str(xt.shape[0])+".fvecs",xt)
 
     elif args.ckpt_path.startswith("pca-"):
         train_size=100000
@@ -100,10 +108,10 @@ if __name__ == "__main__":
         xq /= np.linalg.norm(xq, axis=1, keepdims=True)
         xt = np.dot(xt, PCA)
         xt /= np.linalg.norm(xt, axis=1, keepdims=True)
-        print("calc fnish")
-        net = nn.Sequential()
+        fvecs_write(args.out_prefix+".pca.query.d"+str(xq.shape[1])+".n"+str(xq.shape[0])+".fvecs",xq)
+        fvecs_write(args.out_prefix+".pca.base.d"+str(xb.shape[1])+".n"+str(xb.shape[0])+".fvecs",xb)
+        fvecs_write(args.out_prefix+".pca.learn.d"+str(xt.shape[1])+".n"+str(xt.shape[0])+".fvecs",xt)
     else:
         print("Main argument not understood: should be the path to a net checkpoint")
         import sys;sys.exit(1)
 
-    evaluate(net, xq, xb, gt, [args.quantizer], '%s,rank=%d' % (args.quantizer, 10), device=args.device, trainset=xt[:train_size])

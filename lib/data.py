@@ -30,11 +30,53 @@ def mmap_bvecs(fname):
 def getBasedir(s):
     paths = {
         "bigann": "/datasets01/simsearch/041218/bigann",
-        "deep1b": "/datasets01/simsearch/041218/deep1b"
+        "deep1b": "/datasets01/simsearch/041218/deep1b",
+        "mmu10m": "/home/zhangcunyi/code/spreadingvectors/mmu10m"
     }
 
     return paths[s]
 
+
+def load_mmu10mpca(device, size = 10 ** 7, test=True, qsize=10 ** 5):
+    basedir = getBasedir("mmu10m") + '/'
+    #xt = mmap_fvecs(basedir + 'learn128_new.fvecs')
+    xt = mmap_fvecs(basedir + 'mmu0.5b_learn.198w.fvecs')
+    if test:
+        xb = mmap_fvecs(basedir + 'base128_new.fvecs')
+        xq = mmap_fvecs(basedir + 'query128_new.fvecs')
+        xb = xb[:size]
+
+        gt = ivecs_read(basedir + 'groundtruth1024.ivecs')
+    else:
+        xb = xt[:size]
+        xq = xt[size:size+qsize]
+        xt = xt[size+qsize:]
+
+    xb, xq = sanitize(xb), sanitize(xq)
+    if not test:
+        gt = get_nearestneighbors(xq, xb, 100, device)
+
+    return xt, xb, xq, gt
+
+def load_mmu10m(device, size = 10 ** 7, test=True, qsize=10 ** 5):
+    basedir = getBasedir("mmu10m") + '/'
+    xt = mmap_fvecs(basedir + 'learn1024_new.fvecs')
+    if test:
+        xb = mmap_fvecs(basedir + 'base1024_new.fvecs')
+        xq = mmap_fvecs(basedir + 'query1024_new.fvecs')
+        xb = xb[:size]
+
+        gt = ivecs_read(basedir + 'groundtruth1024.ivecs')
+    else:
+        xb = xt[:size]
+        xq = xt[size:size+qsize]
+        xt = xt[size+qsize:]
+
+    xb, xq = sanitize(xb), sanitize(xq)
+    if not test:
+        gt = get_nearestneighbors(xq, xb, 100, device)
+
+    return xt, xb, xq, gt
 
 def load_deep1b(device, size = 10 ** 6, test=True, qsize=10 ** 5):
     basedir = getBasedir("deep1b") + '/'
@@ -90,3 +132,7 @@ def load_dataset(name, device, size=10**6, test=True):
         return load_bigann(device, size, test)
     elif name == "deep1b":
         return load_deep1b(device, size, test)
+    elif name == "mmu10m":
+        return load_mmu10m(device, size, test)
+    elif name == "mmu10mpca":
+        return load_mmu10mpca(device, size, test)

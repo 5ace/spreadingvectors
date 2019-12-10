@@ -79,6 +79,7 @@ class OPQ(Quantizer):
             self.dim, "OPQ%d_%d,PQ%d" % (nbytes, nbytes * 8, nbytes))
 
     def train(self, x):
+        print(x.ndim,x.shape,x.size)
         self.index.train(x)
 
     def quantize(self, x):
